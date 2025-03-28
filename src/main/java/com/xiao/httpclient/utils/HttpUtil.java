@@ -1,58 +1,33 @@
 package com.xiao.httpclient.utils;
 
-import com.alibaba.fastjson.JSON;
-import com.xiao.httpclient.entity.User;
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpResponse;
-import org.apache.http.client.methods.HttpDelete;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.client.methods.HttpPut;
 import org.apache.http.client.utils.URIBuilder;
 import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.CloseableHttpClient;
-import org.apache.http.impl.client.HttpClients;
 import org.apache.http.util.EntityUtils;
+import org.springframework.stereotype.Component;
 
-import java.io.IOException;
 import java.net.URI;
-import java.util.HashMap;
 import java.util.Map;
 
+import lombok.extern.slf4j.Slf4j;
+import org.apache.http.client.methods.CloseableHttpResponse;
+
+import javax.annotation.Resource;
+import java.nio.charset.StandardCharsets;
+
+/**
+ * HTTP请求工具类
+ */
+@Slf4j
+@Component
 public class HttpUtil {
-    public static void main(String[] args) {
-        // 创建一个Map来存储请求头
-        Map<String, String> headers = new HashMap<>();
-        // 添加一些常见的HTTP请求头
-        headers.put("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36");
-        headers.put("Accept", "application/json");
-        headers.put("Content-Type", "application/json");
-        headers.put("Authorization", "Bearer abc123xyz");
-        headers.put("Host", "api.example.com");
-        headers.put("Accept-Language", "en-US,en;q=0.9");
-        headers.put("Connection", "keep-alive");
-        headers.put("Cache-Control", "no-cache");
-
-        // 创建一个Map来存储请求参数（每个参数名对应一个字符串值）
-        Map<String, String> params = new HashMap<>();
-        // 添加一些常见的HTTP请求参数
-        params.put("username", "john_doe");
-        params.put("password", "s3cr3t");
-        params.put("age", "30");
-        params.put("email", "john.doe@example.com");
-        params.put("subscribe", "true");
-        params.put("country", "USA");
-
-        User user = new User();
-        user.setUsername("傻逼");
-        user.setPassword("dsfhskf");
-        String jsonBody = JSON.toJSONString(user);
-
-        System.out.println(doGet("http://localhost:8080/get", headers, params));
-        System.out.println(doPost("http://localhost:8080/post", headers, jsonBody));
-        System.out.println(doPut("http://localhost:8080/put", headers, jsonBody));
-        System.out.println(doDelete("http://localhost:8080/delete", headers));
-    }
+    @Resource
+    CloseableHttpClient httpClient;
 
     /**
      * 发送GET请求
@@ -62,11 +37,8 @@ public class HttpUtil {
      * @param params      请求参数(可为null)
      * @return            响应内容字符串
      */
-    public static String doGet(String url, Map<String, String> headers, Map<String, String> params) {
+    public String doGet(String url, Map<String, String> headers, Map<String, String> params) {
         try {
-            // 创建HttpClient实例
-            CloseableHttpClient httpClient = HttpClients.createDefault();
-
             // 构建带参数的URI
             URIBuilder builder = new URIBuilder(url);
             if (params != null && !params.isEmpty()) {
@@ -96,9 +68,6 @@ public class HttpUtil {
                 result = EntityUtils.toString(entity, "UTF-8");
             }
 
-            // 关闭资源
-            httpClient.close();
-
             return result;
         } catch (Exception e) {
             throw new RuntimeException(e);
@@ -107,70 +76,46 @@ public class HttpUtil {
 
 
     /**
-     * 发送POST请求，请求体为JSON字符串，内部处理异常不向外抛出
+     * 发送POST请求
      *
-     * @param url         请求URL
-     * @param headers     请求头(可为null)
-     * @param jsonBody    JSON格式的请求体
-     * @return            响应内容字符串，出错时返回null
+     * @param url 请求URL
+     * @param headers 请求头
+     * @param requestBody 请求体
+     * @return 响应字符串
      */
-    public static String doPost(String url, Map<String, String> headers, String jsonBody) {
-        CloseableHttpClient httpClient = null;
-        String result = null;
-
+    public String doPost(String url, Map<String, String> headers, String requestBody) {
         try {
-            // 创建HttpClient实例
-            httpClient = HttpClients.createDefault();
-
-            // 创建HttpPost请求
             HttpPost httpPost = new HttpPost(url);
 
-            // 设置JSON请求体
-            if (jsonBody != null && !jsonBody.isEmpty()) {
-                StringEntity entity = new StringEntity(jsonBody, "UTF-8");
-                entity.setContentType("application/json");
+            // 设置请求头
+            if (headers != null && !headers.isEmpty()) {
+                headers.forEach(httpPost::setHeader);
+            }
+
+            // 设置请求体
+            if (requestBody != null) {
+                StringEntity entity = new StringEntity(requestBody, StandardCharsets.UTF_8);
                 httpPost.setEntity(entity);
             }
 
-            // 添加请求头
-            if (headers != null && !headers.isEmpty()) {
-                for (Map.Entry<String, String> header : headers.entrySet()) {
-                    httpPost.addHeader(header.getKey(), header.getValue());
+            // 执行请求
+            try (CloseableHttpResponse response = httpClient.execute(httpPost)) {
+                // 获取响应体
+                String responseBody = EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8);
+
+                // 检查响应状态
+                int statusCode = response.getStatusLine().getStatusCode();
+                if (statusCode >= 200 && statusCode < 300) {
+                    return responseBody;
+                } else {
+                    log.error("HTTP请求失败, URL: {}, 状态码: {}, 响应: {}", url, statusCode, responseBody);
+                    throw new RuntimeException("HTTP请求失败: " + statusCode);
                 }
-            }
-
-            // 如果没有明确设置Content-Type头，则默认设置为application/json
-            if (headers == null || !headers.containsKey("Content-Type")) {
-                httpPost.addHeader("Content-Type", "application/json");
-            }
-
-            // 执行请求并获取响应
-            HttpResponse response = httpClient.execute(httpPost);
-            HttpEntity entity = response.getEntity();
-
-            // 转换响应内容为字符串
-            if (entity != null) {
-                result = EntityUtils.toString(entity, "UTF-8");
             }
         } catch (Exception e) {
-            // 记录异常但不抛出
-            e.printStackTrace();
-            // 或者使用日志框架记录
-            // logger.error("POST请求发生异常: " + e.getMessage(), e);
-        } finally {
-            // 确保关闭资源
-            if (httpClient != null) {
-                try {
-                    httpClient.close();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                    // 或者使用日志框架记录
-                    // logger.error("关闭HttpClient时发生异常: " + e.getMessage(), e);
-                }
-            }
+            log.error("HTTP请求异常, URL: {}", url, e);
+            throw new RuntimeException("HTTP请求异常: " + e.getMessage(), e);
         }
-
-        return result;
     }
 
     /**
@@ -181,12 +126,9 @@ public class HttpUtil {
      * @param jsonBody    JSON格式的请求体
      * @return            响应内容字符串，出错时返回null
      */
-    public static String doPut(String url, Map<String, String> headers, String jsonBody) {
-        CloseableHttpClient httpClient = null;
+    public String doPut(String url, Map<String, String> headers, String jsonBody) {
         String result = null;
         try {
-            // 创建HttpClient实例
-            httpClient = HttpClients.createDefault();
             // 创建HttpPut请求
             HttpPut httpPut = new HttpPut(url);
             // 设置JSON请求体
@@ -217,67 +159,82 @@ public class HttpUtil {
             e.printStackTrace();
             // 或者使用日志框架记录
             // logger.error("PUT请求发生异常: " + e.getMessage(), e);
-        } finally {
-            // 确保关闭资源
-            if (httpClient != null) {
-                try {
-                    httpClient.close();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                    // 或者使用日志框架记录
-                    // logger.error("关闭HttpClient时发生异常: " + e.getMessage(), e);
-                }
-            }
         }
 
         return result;
     }
 
     /**
-     * 发送DELETE请求，内部处理异常不向外抛出
+     * 发送DELETE请求，不带请求体
      *
      * @param url         请求URL
      * @param headers     请求头(可为null)
      * @return            响应内容字符串，出错时返回null
      */
-    public static String doDelete(String url, Map<String, String> headers) {
-        CloseableHttpClient httpClient = null;
+    public String doDelete(String url, Map<String, String> headers) {
+        return doDelete(url, headers, null);
+    }
+
+    /**
+     * 发送DELETE请求，支持请求体
+     *
+     * @param url         请求URL
+     * @param headers     请求头(可为null)
+     * @param jsonBody    JSON格式的请求体(可为null)
+     * @return            响应内容字符串，出错时返回null
+     */
+    public String doDelete(String url, Map<String, String> headers, String jsonBody) {
         String result = null;
         try {
-            // 创建HttpClient实例
-            httpClient = HttpClients.createDefault();
-            // 创建HttpDelete请求
-            HttpDelete httpDelete = new HttpDelete(url);
+            // 创建HttpDelete请求，Apache HttpClient标准实现不支持带请求体的DELETE
+            // 使用自定义的HttpEntityEnclosingDeleteRequest或直接使用HttpDeleteWithBody类
+            HttpDeleteWithBody httpDelete = new HttpDeleteWithBody(url);
+
+            // 设置JSON请求体
+            if (jsonBody != null && !jsonBody.isEmpty()) {
+                StringEntity entity = new StringEntity(jsonBody, "UTF-8");
+                entity.setContentType("application/json");
+                httpDelete.setEntity(entity);
+            }
+
             // 添加请求头
             if (headers != null && !headers.isEmpty()) {
                 for (Map.Entry<String, String> header : headers.entrySet()) {
                     httpDelete.addHeader(header.getKey(), header.getValue());
                 }
             }
+
+            // 如果没有明确设置Content-Type头且有请求体，则默认设置为application/json
+            if (jsonBody != null && !jsonBody.isEmpty() && (headers == null || !headers.containsKey("Content-Type"))) {
+                httpDelete.addHeader("Content-Type", "application/json");
+            }
+
             // 执行请求并获取响应
             HttpResponse response = httpClient.execute(httpDelete);
             HttpEntity entity = response.getEntity();
+
             // 转换响应内容为字符串
             if (entity != null) {
                 result = EntityUtils.toString(entity, "UTF-8");
             }
         } catch (Exception e) {
             // 记录异常但不抛出
-            e.printStackTrace();
-            // 或者使用日志框架记录
-            // logger.error("DELETE请求发生异常: " + e.getMessage(), e);
-        } finally {
-            // 确保关闭资源
-            if (httpClient != null) {
-                try {
-                    httpClient.close();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                    // 或者使用日志框架记录
-                    // logger.error("关闭HttpClient时发生异常: " + e.getMessage(), e);
-                }
-            }
+            log.error("DELETE请求发生异常: {}", e.getMessage(), e);
         }
         return result;
+    }
+
+    /**
+     * 支持请求体的HttpDelete请求
+     */
+    private static class HttpDeleteWithBody extends HttpPost {
+        public HttpDeleteWithBody(final String url) {
+            super(url);
+        }
+
+        @Override
+        public String getMethod() {
+            return "DELETE";
+        }
     }
 }
