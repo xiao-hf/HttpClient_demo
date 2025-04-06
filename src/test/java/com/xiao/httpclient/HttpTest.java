@@ -1,5 +1,6 @@
 package com.xiao.httpclient;
 
+import com.xiao.httpclient.utils.HttpUtil;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 
