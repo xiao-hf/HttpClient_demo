@@ -30,7 +30,7 @@ public class HttpTest {
 
     @Test
     public void sc() {
-        System.out.println(siliconflowUtil.ask("你好!"));
+        System.out.println(siliconflowUtil.ask("写一颗线段树"));
     }
     @Resource
     BailianUtil bailianUtil;
