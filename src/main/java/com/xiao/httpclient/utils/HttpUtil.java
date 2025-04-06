@@ -119,6 +119,54 @@ public class HttpUtil {
     }
 
     /**
+     * 发送POST请求，支持流式处理响应
+     *
+     * @param url 请求URL
+     * @param headers 请求头
+     * @param requestBody 请求体
+     * @param streamResponseHandler 流式响应处理器
+     */
+    public void doPostStream(String url, Map<String, String> headers, String requestBody, StreamResponseHandler streamResponseHandler) {
+        try {
+            HttpPost httpPost = new HttpPost(url);
+
+            // 设置请求头
+            if (headers != null && !headers.isEmpty()) {
+                headers.forEach(httpPost::setHeader);
+            }
+
+            // 设置请求体
+            if (requestBody != null) {
+                StringEntity entity = new StringEntity(requestBody, StandardCharsets.UTF_8);
+                httpPost.setEntity(entity);
+            }
+
+            // 执行请求，但不关闭响应，而是将其传递给处理器
+            try (CloseableHttpResponse response = httpClient.execute(httpPost)) {
+                // 检查响应状态
+                int statusCode = response.getStatusLine().getStatusCode();
+                if (statusCode >= 200 && statusCode < 300) {
+                    // 获取响应实体
+                    HttpEntity entity = response.getEntity();
+                    if (entity != null) {
+                        // 将响应流传递给处理器
+                        streamResponseHandler.handleStream(entity.getContent());
+                    }
+                } else {
+                    // 处理错误状态码
+                    String responseBody = EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8);
+                    log.error("HTTP流式请求失败, URL: {}, 状态码: {}, 响应: {}", url, statusCode, responseBody);
+                    throw new RuntimeException("HTTP流式请求失败: " + statusCode);
+                }
+            }
+            // 确保响应被关闭
+        } catch (Exception e) {
+            log.error("HTTP流式请求异常, URL: {}", url, e);
+            throw new RuntimeException("HTTP流式请求异常: " + e.getMessage(), e);
+        }
+    }
+
+    /**
      * 发送PUT请求，请求体为JSON字符串，内部处理异常不向外抛出
      *
      * @param url         请求URL
@@ -236,5 +284,17 @@ public class HttpUtil {
         public String getMethod() {
             return "DELETE";
         }
+    }
+
+    /**
+     * 流式响应处理器接口
+     */
+    public interface StreamResponseHandler {
+        /**
+         * 处理输入流
+         * @param inputStream 响应输入流
+         * @throws Exception 可能发生的异常
+         */
+        void handleStream(java.io.InputStream inputStream) throws Exception;
     }
 }

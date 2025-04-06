@@ -61,4 +61,19 @@ public class HttpTest {
             throw e; // 重新抛出异常，以便测试框架能够捕获
         }
     }
+
+    @Test
+    public void scStream() {
+        StringBuilder fullResponse = new StringBuilder();
+        
+        System.out.println("开始流式请求测试...");
+        siliconflowUtil.askStream("写一颗线段树", chunk -> {
+            // 处理每个流式响应片段
+            System.out.print(chunk); // 实时打印每个片段
+            fullResponse.append(chunk); // 收集完整响应
+        });
+        
+        System.out.println("\n\n完整响应:");
+        System.out.println(fullResponse.toString());
+    }
 }

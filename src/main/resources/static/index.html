@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI流式聊天演示</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .chat-container {
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            padding: 20px;
+            height: 400px;
+            overflow-y: auto;
+            margin-bottom: 20px;
+            background-color: #f9f9f9;
+        }
+        
+        .form-container {
+            display: flex;
+            margin-bottom: 20px;
+        }
+        
+        input {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            margin-right: 10px;
+        }
+        
+        button {
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        
+        button:disabled {
+            background-color: #cccccc;
+        }
+        
+        .response {
+            white-space: pre-wrap;
+            line-height: 1.5;
+        }
+        
+        .status {
+            font-style: italic;
+            color: #666;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>AI流式聊天演示</h1>
+    
+    <div class="chat-container" id="chatContainer">
+        <div class="status" id="status">请输入问题开始对话</div>
+        <div class="response" id="response"></div>
+    </div>
+    
+    <div class="form-container">
+        <input type="text" id="questionInput" placeholder="请输入您的问题...">
+        <button id="submitBtn" onclick="askQuestion()">发送</button>
+    </div>
+    
+    <script>
+        let eventSource = null;
+        const statusElem = document.getElementById('status');
+        const responseElem = document.getElementById('response');
+        const questionInput = document.getElementById('questionInput');
+        const submitBtn = document.getElementById('submitBtn');
+        
+        // 存储接收到的消息，用于排序
+        let messageBuffer = [];
+        
+        function askQuestion() {
+            const question = questionInput.value.trim();
+            if (!question) {
+                alert('请输入问题');
+                return;
+            }
+            
+            // 禁用输入和按钮
+            questionInput.disabled = true;
+            submitBtn.disabled = true;
+            
+            // 清空上一次的回答
+            responseElem.textContent = '';
+            statusElem.textContent = '正在连接...';
+            
+            // 关闭之前的连接
+            if (eventSource) {
+                eventSource.close();
+            }
+            
+            // 重置消息缓冲区
+            messageBuffer = [];
+            
+            // 创建新的SSE连接
+            eventSource = new EventSource(`/api/stream/chat?question=${encodeURIComponent(question)}`);
+            
+            // 监听消息事件
+            eventSource.addEventListener('message', function(event) {
+                try {
+                    const message = JSON.parse(event.data);
+                    
+                    // 将消息添加到缓冲区
+                    messageBuffer.push(message);
+                    
+                    // 按序号排序
+                    messageBuffer.sort((a, b) => a.seq - b.seq);
+                    
+                    // 更新显示
+                    updateDisplay();
+                    
+                    // 如果是结束消息，关闭连接
+                    if (message.type === 'end') {
+                        eventSource.close();
+                        questionInput.disabled = false;
+                        submitBtn.disabled = false;
+                        statusElem.textContent = '回答完成';
+                    }
+                } catch (e) {
+                    console.error('解析消息失败:', e);
+                }
+            });
+            
+            // 监听错误
+            eventSource.onerror = function(error) {
+                console.error('SSE连接错误:', error);
+                statusElem.textContent = '连接错误，请重试';
+                eventSource.close();
+                questionInput.disabled = false;
+                submitBtn.disabled = false;
+            };
+        }
+        
+        function updateDisplay() {
+            // 清空当前显示
+            responseElem.textContent = '';
+            
+            // 按顺序显示所有内容消息
+            let content = '';
+            
+            messageBuffer.forEach(message => {
+                if (message.type === 'start') {
+                    statusElem.textContent = message.data;
+                } else if (message.type === 'content') {
+                    content += message.data;
+                } else if (message.type === 'end') {
+                    statusElem.textContent = message.data;
+                }
+            });
+            
+            responseElem.textContent = content;
+            
+            // 滚动到底部
+            const chatContainer = document.getElementById('chatContainer');
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+        
+        // 按Enter键发送
+        questionInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                askQuestion();
+            }
+        });
+    </script>
+</body>
+</html> 
