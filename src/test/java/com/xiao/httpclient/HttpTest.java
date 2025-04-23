@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 
 import javax.annotation.Resource;
+import java.io.File;
 import java.net.URI;
 import java.util.HashMap;
 import java.util.Map;
@@ -17,6 +18,7 @@ public class HttpTest {
     HttpUtil httpUtil;
     @Resource
     SiliconflowUtil siliconflowUtil;
+
     @Test
     public void test() {
         String url = "https://www.baidu.com";

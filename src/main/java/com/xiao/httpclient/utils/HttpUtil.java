@@ -7,10 +7,15 @@ import org.apache.http.client.methods.HttpPost;
 import org.apache.http.client.methods.HttpPut;
 import org.apache.http.client.utils.URIBuilder;
 import org.apache.http.entity.StringEntity;
+import org.apache.http.entity.ContentType;
+import org.apache.http.entity.mime.MultipartEntityBuilder;
+import org.apache.http.entity.mime.content.FileBody;
+import org.apache.http.entity.mime.content.StringBody;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.util.EntityUtils;
 import org.springframework.stereotype.Component;
 
+import java.io.File;
 import java.net.URI;
 import java.util.Map;
 
@@ -296,5 +301,152 @@ public class HttpUtil {
          * @throws Exception 可能发生的异常
          */
         void handleStream(java.io.InputStream inputStream) throws Exception;
+    }
+
+    /**
+     * 发送包含文件的multipart/form-data格式POST请求
+     *
+     * @param url       请求URL
+     * @param headers   请求头(可为null)
+     * @param params    请求参数(可为null)，会作为普通表单字段
+     * @param files     文件参数，key为表单字段名，value为文件对象
+     * @return          响应内容字符串
+     */
+    public String doPostWithFiles(String url, Map<String, String> headers, Map<String, String> params, Map<String, File> files) {
+        try {
+            HttpPost httpPost = new HttpPost(url);
+
+            // 设置请求头
+            if (headers != null && !headers.isEmpty()) {
+                for (Map.Entry<String, String> header : headers.entrySet()) {
+                    httpPost.addHeader(header.getKey(), header.getValue());
+                }
+            }
+
+            // 创建MultipartEntityBuilder，用于构建multipart请求体
+            MultipartEntityBuilder builder = MultipartEntityBuilder.create();
+
+            // 添加文本参数
+            if (params != null && !params.isEmpty()) {
+                for (Map.Entry<String, String> param : params.entrySet()) {
+                    // 使用UTF-8编码添加字符串字段
+                    StringBody stringBody = new StringBody(param.getValue(), ContentType.create("text/plain", StandardCharsets.UTF_8));
+                    builder.addPart(param.getKey(), stringBody);
+                }
+            }
+
+            // 添加文件参数
+            if (files != null && !files.isEmpty()) {
+                for (Map.Entry<String, File> fileEntry : files.entrySet()) {
+                    // 使用FileBody添加文件，自动检测文件类型
+                    FileBody fileBody = new FileBody(fileEntry.getValue());
+                    builder.addPart(fileEntry.getKey(), fileBody);
+                }
+            }
+
+            // 设置请求实体
+            HttpEntity entity = builder.build();
+            httpPost.setEntity(entity);
+
+            // 执行请求
+            try (CloseableHttpResponse response = httpClient.execute(httpPost)) {
+                // 获取响应体
+                String responseBody = EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8);
+
+                // 检查响应状态
+                int statusCode = response.getStatusLine().getStatusCode();
+                if (statusCode >= 200 && statusCode < 300) {
+                    return responseBody;
+                } else {
+                    log.error("HTTP文件上传请求失败, URL: {}, 状态码: {}, 响应: {}", url, statusCode, responseBody);
+                    throw new RuntimeException("HTTP文件上传请求失败: " + statusCode);
+                }
+            }
+        } catch (Exception e) {
+            log.error("HTTP文件上传请求异常, URL: {}", url, e);
+            throw new RuntimeException("HTTP文件上传请求异常: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 发送包含单个文件的multipart/form-data格式POST请求
+     *
+     * @param url         请求URL
+     * @param headers     请求头(可为null)
+     * @param params      请求参数(可为null)，会作为普通表单字段
+     * @param fileField   文件字段名
+     * @param file        要上传的文件
+     * @return            响应内容字符串
+     */
+    public String doPostWithFile(String url, Map<String, String> headers, Map<String, String> params, String fileField, File file) {
+        Map<String, File> fileMap = new java.util.HashMap<>();
+        fileMap.put(fileField, file);
+        return doPostWithFiles(url, headers, params, fileMap);
+    }
+
+    /**
+     * 发送包含文件二进制数据的multipart/form-data格式POST请求
+     * 适用于从内存中上传文件
+     *
+     * @param url         请求URL
+     * @param headers     请求头(可为null)
+     * @param params      请求参数(可为null)，会作为普通表单字段
+     * @param fileField   文件字段名
+     * @param fileName    文件名
+     * @param fileData    文件二进制数据
+     * @param contentType 文件内容类型，如image/jpeg，为null时自动检测
+     * @return            响应内容字符串
+     */
+    public String doPostWithFileBytes(String url, Map<String, String> headers, Map<String, String> params, 
+                                     String fileField, String fileName, byte[] fileData, ContentType contentType) {
+        try {
+            HttpPost httpPost = new HttpPost(url);
+
+            // 设置请求头
+            if (headers != null && !headers.isEmpty()) {
+                for (Map.Entry<String, String> header : headers.entrySet()) {
+                    httpPost.addHeader(header.getKey(), header.getValue());
+                }
+            }
+
+            // 创建MultipartEntityBuilder
+            MultipartEntityBuilder builder = MultipartEntityBuilder.create();
+
+            // 添加文本参数
+            if (params != null && !params.isEmpty()) {
+                for (Map.Entry<String, String> param : params.entrySet()) {
+                    StringBody stringBody = new StringBody(param.getValue(), ContentType.create("text/plain", StandardCharsets.UTF_8));
+                    builder.addPart(param.getKey(), stringBody);
+                }
+            }
+
+            // 添加二进制文件
+            if (contentType == null) {
+                contentType = ContentType.APPLICATION_OCTET_STREAM;
+            }
+            builder.addBinaryBody(fileField, fileData, contentType, fileName);
+
+            // 设置请求实体
+            HttpEntity entity = builder.build();
+            httpPost.setEntity(entity);
+
+            // 执行请求
+            try (CloseableHttpResponse response = httpClient.execute(httpPost)) {
+                // 获取响应体
+                String responseBody = EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8);
+
+                // 检查响应状态
+                int statusCode = response.getStatusLine().getStatusCode();
+                if (statusCode >= 200 && statusCode < 300) {
+                    return responseBody;
+                } else {
+                    log.error("HTTP文件字节上传请求失败, URL: {}, 状态码: {}, 响应: {}", url, statusCode, responseBody);
+                    throw new RuntimeException("HTTP文件字节上传请求失败: " + statusCode);
+                }
+            }
+        } catch (Exception e) {
+            log.error("HTTP文件字节上传请求异常, URL: {}", url, e);
+            throw new RuntimeException("HTTP文件字节上传请求异常: " + e.getMessage(), e);
+        }
     }
 }
