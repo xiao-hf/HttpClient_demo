@@ -17,6 +17,7 @@ import org.springframework.stereotype.Component;
 
 import java.io.File;
 import java.net.URI;
+import java.util.List;
 import java.util.Map;
 
 import lombok.extern.slf4j.Slf4j;
@@ -451,16 +452,16 @@ public class HttpUtil {
     }
 
     /**
-     * 发送包含多个文件数组的multipart/form-data格式POST请求
+     * 发送包含多个文件列表的multipart/form-data格式POST请求
      *
      * @param url           请求URL
      * @param headers       请求头(可为null)
      * @param params        请求参数(可为null)，会作为普通表单字段
-     * @param fileArraysMap 文件数组参数，key为表单字段名，value为文件对象数组
+     * @param fileListsMap  文件列表参数，key为表单字段名，value为文件对象列表
      * @return              响应内容字符串
      */
-    public String doPostWithFileArrays(String url, Map<String, String> headers, Map<String, String> params,
-                                       Map<String, File[]> fileArraysMap) {
+    public String doPostWithFileLists(String url, Map<String, String> headers, Map<String, String> params,
+                                      Map<String, List<File>> fileListsMap) {
         try {
             HttpPost httpPost = new HttpPost(url);
 
@@ -483,11 +484,11 @@ public class HttpUtil {
                 }
             }
 
-            // 添加文件数组参数
-            if (fileArraysMap != null && !fileArraysMap.isEmpty()) {
-                for (Map.Entry<String, File[]> fileArrayEntry : fileArraysMap.entrySet()) {
-                    String fieldName = fileArrayEntry.getKey();
-                    File[] files = fileArrayEntry.getValue();
+            // 添加文件列表参数
+            if (fileListsMap != null && !fileListsMap.isEmpty()) {
+                for (Map.Entry<String, List<File>> fileListEntry : fileListsMap.entrySet()) {
+                    String fieldName = fileListEntry.getKey();
+                    List<File> files = fileListEntry.getValue();
 
                     if (files != null) {
                         for (File file : files) {
@@ -515,13 +516,13 @@ public class HttpUtil {
                 if (statusCode >= 200 && statusCode < 300) {
                     return responseBody;
                 } else {
-                    log.error("HTTP文件数组上传请求失败, URL: {}, 状态码: {}, 响应: {}", url, statusCode, responseBody);
-                    throw new RuntimeException("HTTP文件数组上传请求失败: " + statusCode);
+                    log.error("HTTP文件列表上传请求失败, URL: {}, 状态码: {}, 响应: {}", url, statusCode, responseBody);
+                    throw new RuntimeException("HTTP文件列表上传请求失败: " + statusCode);
                 }
             }
         } catch (Exception e) {
-            log.error("HTTP文件数组上传请求异常, URL: {}", url, e);
-            throw new RuntimeException("HTTP文件数组上传请求异常: " + e.getMessage(), e);
+            log.error("HTTP文件列表上传请求异常, URL: {}", url, e);
+            throw new RuntimeException("HTTP文件列表上传请求异常: " + e.getMessage(), e);
         }
     }
 }
