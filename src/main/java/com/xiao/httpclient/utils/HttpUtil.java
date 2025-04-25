@@ -305,6 +305,61 @@ public class HttpUtil {
     }
 
     /**
+     * 发送包含表单数据的multipart/form-data格式POST请求
+     *
+     * @param url       请求URL
+     * @param headers   请求头(可为null)
+     * @param textParams 文本参数，会作为普通表单字段
+     * @return         响应内容字符串
+     */
+    public String doPostFormData(String url, Map<String, String> headers, Map<String, String> textParams) {
+        try {
+            HttpPost httpPost = new HttpPost(url);
+
+            // 设置请求头
+            if (headers != null && !headers.isEmpty()) {
+                for (Map.Entry<String, String> header : headers.entrySet()) {
+                    httpPost.setHeader(header.getKey(), header.getValue());
+                }
+            }
+
+            // 创建MultipartEntityBuilder，用于构建multipart请求体
+            MultipartEntityBuilder builder = MultipartEntityBuilder.create();
+
+            // 添加文本参数
+            if (textParams != null && !textParams.isEmpty()) {
+                for (Map.Entry<String, String> param : textParams.entrySet()) {
+                    // 使用addTextBody方法添加文本内容
+                    builder.addTextBody(param.getKey(), param.getValue(), 
+                        ContentType.TEXT_PLAIN.withCharset(StandardCharsets.UTF_8));
+                }
+            }
+
+            // 设置请求实体
+            HttpEntity entity = builder.build();
+            httpPost.setEntity(entity);
+
+            // 执行请求
+            try (CloseableHttpResponse response = httpClient.execute(httpPost)) {
+                // 获取响应体
+                String responseBody = EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8);
+
+                // 检查响应状态
+                int statusCode = response.getStatusLine().getStatusCode();
+                if (statusCode >= 200 && statusCode < 300) {
+                    return responseBody;
+                } else {
+                    log.error("HTTP表单请求失败, URL: {}, 状态码: {}, 响应: {}", url, statusCode, responseBody);
+                    throw new RuntimeException("HTTP表单请求失败: " + statusCode);
+                }
+            }
+        } catch (Exception e) {
+            log.error("HTTP表单请求异常, URL: {}", url, e);
+            throw new RuntimeException("HTTP表单请求异常: " + e.getMessage(), e);
+        }
+    }
+
+    /**
      * 发送包含文件的multipart/form-data格式POST请求
      *
      * @param url       请求URL
@@ -320,7 +375,7 @@ public class HttpUtil {
             // 设置请求头
             if (headers != null && !headers.isEmpty()) {
                 for (Map.Entry<String, String> header : headers.entrySet()) {
-                    httpPost.addHeader(header.getKey(), header.getValue());
+                    httpPost.setHeader(header.getKey(), header.getValue());
                 }
             }
 
@@ -330,18 +385,17 @@ public class HttpUtil {
             // 添加文本参数
             if (params != null && !params.isEmpty()) {
                 for (Map.Entry<String, String> param : params.entrySet()) {
-                    // 使用UTF-8编码添加字符串字段
-                    StringBody stringBody = new StringBody(param.getValue(), ContentType.create("text/plain", StandardCharsets.UTF_8));
-                    builder.addPart(param.getKey(), stringBody);
+                    // 使用addTextBody方法添加文本内容
+                    builder.addTextBody(param.getKey(), param.getValue(), 
+                        ContentType.TEXT_PLAIN.withCharset(StandardCharsets.UTF_8));
                 }
             }
 
             // 添加文件参数
             if (files != null && !files.isEmpty()) {
                 for (Map.Entry<String, File> fileEntry : files.entrySet()) {
-                    // 使用FileBody添加文件，自动检测文件类型
-                    FileBody fileBody = new FileBody(fileEntry.getValue());
-                    builder.addPart(fileEntry.getKey(), fileBody);
+                    // 使用addBinaryBody添加文件
+                    builder.addBinaryBody(fileEntry.getKey(), fileEntry.getValue());
                 }
             }
 
@@ -406,7 +460,7 @@ public class HttpUtil {
             // 设置请求头
             if (headers != null && !headers.isEmpty()) {
                 for (Map.Entry<String, String> header : headers.entrySet()) {
-                    httpPost.addHeader(header.getKey(), header.getValue());
+                    httpPost.setHeader(header.getKey(), header.getValue());
                 }
             }
 
@@ -416,8 +470,8 @@ public class HttpUtil {
             // 添加文本参数
             if (params != null && !params.isEmpty()) {
                 for (Map.Entry<String, String> param : params.entrySet()) {
-                    StringBody stringBody = new StringBody(param.getValue(), ContentType.create("text/plain", StandardCharsets.UTF_8));
-                    builder.addPart(param.getKey(), stringBody);
+                    builder.addTextBody(param.getKey(), param.getValue(), 
+                        ContentType.TEXT_PLAIN.withCharset(StandardCharsets.UTF_8));
                 }
             }
 
@@ -468,19 +522,18 @@ public class HttpUtil {
             // 设置请求头
             if (headers != null && !headers.isEmpty()) {
                 for (Map.Entry<String, String> header : headers.entrySet()) {
-                    httpPost.addHeader(header.getKey(), header.getValue());
+                    httpPost.setHeader(header.getKey(), header.getValue());
                 }
             }
 
-            // 创建MultipartEntityBuilder，用于构建multipart请求体
+            // 创建MultipartEntityBuilder
             MultipartEntityBuilder builder = MultipartEntityBuilder.create();
 
             // 添加文本参数
             if (params != null && !params.isEmpty()) {
                 for (Map.Entry<String, String> param : params.entrySet()) {
-                    // 使用UTF-8编码添加字符串字段
-                    StringBody stringBody = new StringBody(param.getValue(), ContentType.create("text/plain", StandardCharsets.UTF_8));
-                    builder.addPart(param.getKey(), stringBody);
+                    builder.addTextBody(param.getKey(), param.getValue(), 
+                        ContentType.TEXT_PLAIN.withCharset(StandardCharsets.UTF_8));
                 }
             }
 
@@ -493,9 +546,7 @@ public class HttpUtil {
                     if (files != null) {
                         for (File file : files) {
                             if (file != null && file.exists()) {
-                                // 使用相同的字段名添加多个文件
-                                FileBody fileBody = new FileBody(file);
-                                builder.addPart(fieldName, fileBody);
+                                builder.addBinaryBody(fieldName, file);
                             }
                         }
                     }
